@@ -1,6 +1,4 @@
-# meeting-recording
-
-# 會議錄音機器人
+# meeting-recording （會議錄音機器人）
 
 ## 專案概述
 會議錄音機器人由三個 Discord 語音機器人組成：
