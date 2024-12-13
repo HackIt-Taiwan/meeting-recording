@@ -5,7 +5,6 @@ const fs = require('fs');
 const path = require('path');
 const { Storage } = require('@google-cloud/storage');
 
-// 從 .env 中取得設定
 const clientsConfig = [
   { token: process.env.BOT1_TOKEN, channelId: process.env.BOT1_CHANNEL_ID },
   { token: process.env.BOT2_TOKEN, channelId: process.env.BOT2_CHANNEL_ID },
@@ -15,7 +14,6 @@ const clientsConfig = [
 const GOOGLE_APPLICATION_CREDENTIALS = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
 
-// 設定Google Cloud Storage
 const storage = new Storage({
   keyFilename: GOOGLE_APPLICATION_CREDENTIALS,
 });
@@ -46,6 +44,7 @@ for (const config of clientsConfig) {
   let writeStream = null;
   let recordedFileName = null; // 暫時檔名(以開始時間建檔)
   let startTime = null; // 錄音開始時間戳記
+  let leaveTimer = null; // 記錄離開計時器ID
 
   botClient.once('ready', () => {
     console.log(`Logged in as ${botClient.user.tag}`);
@@ -57,6 +56,13 @@ for (const config of clientsConfig) {
 
     // 有人加入目標頻道
     if (newChannel && newChannel.id === config.channelId) {
+      // 若原本有計時器要停止錄音，取消它
+      if (leaveTimer) {
+        clearTimeout(leaveTimer);
+        leaveTimer = null;
+        console.log(`[${botClient.user.tag}] User rejoined channel, canceling stop timer.`);
+      }
+
       if (!voiceConnection || voiceConnection.joinConfig.channelId !== config.channelId) {
         startRecording(newChannel);
       }
@@ -66,7 +72,13 @@ for (const config of clientsConfig) {
     if (oldChannel && oldChannel.id === config.channelId) {
       const channel = oldState.guild.channels.cache.get(config.channelId);
       if (channel && channel.members.filter(m => !m.user.bot).size === 0) {
-        stopRecordingAndUpload();
+        // 頻道沒有人了，等2分鐘後再停止錄音
+        console.log(`[${botClient.user.tag}] Channel empty, will stop recording in 2 minutes if no one re-enters.`);
+        leaveTimer = setTimeout(() => {
+          console.log(`[${botClient.user.tag}] No one returned, stopping recording now.`);
+          stopRecordingAndUpload();
+          leaveTimer = null;
+        }, 2 * 60 * 1000); // 2分鐘(120000毫秒)
       }
     }
   });
